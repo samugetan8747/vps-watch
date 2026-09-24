@@ -43,10 +43,17 @@ jobs:
             --boot-volume-size-in-gbs 50 2>&1)
           CODE=$?
 
-          # Never print the raw $OUT — it can contain the instance's public IP once created.
+          notify() {
+            curl -sf -H "Content-Type: application/json" \
+              -d "{\"content\": \"$1\"}" \
+              "${{ secrets.DISCORD_WEBHOOK_URL }}" >/dev/null || true
+          }
+
+          # Never print the raw $OUT, and never send it to Discord — it can contain the instance's public IP once created.
           if [ $CODE -eq 0 ] && echo "$OUT" | grep -q '"lifecycle-state"'; then
             echo "SUCCESS: an A1.Flex instance was created. Log in to the Oracle console to see the details."
-            exit 1   # non-zero on purpose, so GitHub emails a "run failed" notification as an alert
+            notify "✅ **オラクルA1インスタンス作成に成功しました！** Oracleコンソールで確認してください。"
+            exit 1   # non-zero on purpose, so GitHub also emails a "run failed" notification as a backup alert
           elif echo "$OUT" | grep -qi "out of host capacity\|out of capacity"; then
             echo "Still out of capacity in AD-1. Will retry on the next scheduled run."
             exit 0
@@ -55,5 +62,6 @@ jobs:
             exit 0
           else
             echo "Unexpected error from Oracle — needs a human to look at this."
+            notify "⚠️ オラクルA1リトライで想定外のエラーが発生しました。GitHub Actionsのログを確認してください。"
             exit 1
           fi

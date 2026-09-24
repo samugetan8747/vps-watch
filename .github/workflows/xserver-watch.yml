@@ -18,5 +18,8 @@ jobs:
           else
             echo "The suspension notice was NOT found on the page — signup may be reopened!"
             echo "Check https://vps.xserver.ne.jp/price.php by hand."
-            exit 1   # non-zero on purpose, so GitHub emails a "run failed" notification as an alert
+            curl -sf -H "Content-Type: application/json" \
+              -d '{"content": "🎉 **XServerの無料VPS受付が再開したかもしれません！** https://vps.xserver.ne.jp/price.php を確認してください。"}' \
+              "${{ secrets.DISCORD_WEBHOOK_URL }}" >/dev/null || true
+            exit 1   # non-zero on purpose, so GitHub also emails a "run failed" notification as a backup alert
           fi
