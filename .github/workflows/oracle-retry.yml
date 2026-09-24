@@ -1,0 +1,59 @@
+name: oracle-a1-retry
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install OCI CLI
+        run: pip install --quiet oci-cli
+
+      - name: Configure OCI CLI credentials
+        run: |
+          mkdir -p ~/.oci
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_CLI_USER }}
+          fingerprint=${{ secrets.OCI_CLI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_CLI_TENANCY }}
+          region=${{ secrets.OCI_CLI_REGION }}
+          key_file=/home/runner/.oci/oci_api_key.pem
+          EOF
+          printf '%s\n' "${{ secrets.OCI_CLI_KEY_CONTENT }}" > ~/.oci/oci_api_key.pem
+          printf '%s\n' "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > ~/.oci/instance_key.pub
+          chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
+
+      - name: Attempt to launch A1.Flex instance
+        run: |
+          set +e
+          OUT=$(oci compute instance launch \
+            --compartment-id "${{ secrets.OCI_CLI_TENANCY }}" \
+            --availability-domain "fNXh:AP-TOKYO-1-AD-1" \
+            --shape "VM.Standard.A1.Flex" \
+            --shape-config '{"ocpus":2,"memoryInGBs":12}' \
+            --subnet-id "ocid1.subnet.oc1.ap-tokyo-1.aaaaaaaatl7mswk4lxseyp5xf5emhdohyhazkvybryedh53jbnixqzinhi2q" \
+            --image-id "ocid1.image.oc1.ap-tokyo-1.aaaaaaaa2byp5mlflf5znyci7bca47m2y5cwqnevt3t4b7f7ng6bfqiebcsa" \
+            --assign-public-ip true \
+            --display-name "pachislot-fetcher" \
+            --ssh-authorized-keys-file ~/.oci/instance_key.pub \
+            --boot-volume-size-in-gbs 50 2>&1)
+          CODE=$?
+
+          # Never print the raw $OUT — it can contain the instance's public IP once created.
+          if [ $CODE -eq 0 ] && echo "$OUT" | grep -q '"lifecycle-state"'; then
+            echo "SUCCESS: an A1.Flex instance was created. Log in to the Oracle console to see the details."
+            exit 1   # non-zero on purpose, so GitHub emails a "run failed" notification as an alert
+          elif echo "$OUT" | grep -qi "out of host capacity\|out of capacity"; then
+            echo "Still out of capacity in AD-1. Will retry on the next scheduled run."
+            exit 0
+          elif echo "$OUT" | grep -qi "toomanyrequests\|429"; then
+            echo "Rate-limited by Oracle (429). Will retry on the next scheduled run."
+            exit 0
+          else
+            echo "Unexpected error from Oracle — needs a human to look at this."
+            exit 1
+          fi

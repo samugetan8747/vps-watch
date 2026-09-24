@@ -1,0 +1,22 @@
+name: xserver-vps-watch
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check XServer VPS free-plan signup status
+        run: |
+          HTML=$(curl -sL "https://vps.xserver.ne.jp/price.php")
+          if echo "$HTML" | grep -q "新規のお申し込み受付を一時停止"; then
+            echo "Still suspended."
+            exit 0
+          else
+            echo "The suspension notice was NOT found on the page — signup may be reopened!"
+            echo "Check https://vps.xserver.ne.jp/price.php by hand."
+            exit 1   # non-zero on purpose, so GitHub emails a "run failed" notification as an alert
+          fi
