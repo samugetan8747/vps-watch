@@ -1,0 +1,40 @@
+name: daily-digest
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 22:00 JST
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and send daily summary to Discord
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+          SINCE=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          count_runs() {
+            gh run list --repo "$REPO" --workflow "$1" --limit 200 --json conclusion,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$SINCE\")] | length"
+          }
+          count_flagged() {
+            gh run list --repo "$REPO" --workflow "$1" --limit 200 --json conclusion,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$SINCE\" and .conclusion == \"failure\")] | length"
+          }
+
+          ORACLE_TOTAL=$(count_runs oracle-retry.yml)
+          ORACLE_FLAGGED=$(count_flagged oracle-retry.yml)
+          XSERVER_TOTAL=$(count_runs xserver-watch.yml)
+          XSERVER_FLAGGED=$(count_flagged xserver-watch.yml)
+
+          MSG="📊 **本日のまとめ(過去24時間)**\nオラクルA1チャレンジ: ${ORACLE_TOTAL}回試行(うち要確認 ${ORACLE_FLAGGED}回)\nXサーバー監視: ${XSERVER_TOTAL}回チェック(うち要確認 ${XSERVER_FLAGGED}回)\n※「要確認」はゼロなら平常運転、1以上ならその時に個別通知が届いているはずです。"
+
+          curl -sf -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MSG\"}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
