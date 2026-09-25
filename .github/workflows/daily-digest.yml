@@ -2,7 +2,7 @@ name: daily-digest
 
 on:
   schedule:
-    - cron: '0 13 * * *'   # 22:00 JST
+    - cron: '0 1,13 * * *'   # 10:00 and 22:00 JST
   workflow_dispatch: {}
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
           XSERVER_TOTAL=$(count_runs xserver-watch.yml)
           XSERVER_FLAGGED=$(count_flagged xserver-watch.yml)
 
-          MSG="📊 **本日のまとめ(過去24時間)**\nオラクルA1チャレンジ: ${ORACLE_TOTAL}回試行(うち要確認 ${ORACLE_FLAGGED}回)\nXサーバー監視: ${XSERVER_TOTAL}回チェック(うち要確認 ${XSERVER_FLAGGED}回)\n※「要確認」はゼロなら平常運転、1以上ならその時に個別通知が届いているはずです。"
+          MSG="📊 **定時報告(過去24時間)**\nオラクルA1チャレンジ: ${ORACLE_TOTAL}回試行(うち要確認 ${ORACLE_FLAGGED}回)\nXサーバー監視: ${XSERVER_TOTAL}回チェック(うち要確認 ${XSERVER_FLAGGED}回)\n※「要確認」はゼロなら平常運転、1以上ならその時に個別通知が届いているはずです。"
 
           curl -sf -H "Content-Type: application/json" \
             -d "{\"content\": \"$MSG\"}" \
